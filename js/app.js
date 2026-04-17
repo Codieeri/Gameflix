@@ -1,4 +1,4 @@
-// ========== STATE ==========
+// ========== STATE ========== 
 const state = {
   theme: localStorage.getItem('theme') || 'dark',
   isKidsMode: false,
