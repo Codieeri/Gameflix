@@ -128,7 +128,7 @@ cd backend && python app.py
 
 ## 👩‍💻 Built By
 
-**Riya Sonara**
+**Riya Sonara And Gamefilx Devlopement Team ✨**
 
 ---
 
