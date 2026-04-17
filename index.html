@@ -201,6 +201,63 @@
   <h3 style="color:#fff; font-size:1.1rem; margin-bottom:10px;">Screenshots</h3>
   <div id="screenshotGrid" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:8px;"></div>
 </div>
+    let currentScreenshots = [];
+let currentScreenshotIndex = 0;
+
+async function fetchScreenshots(appid) {
+  try {
+    const res = await fetch(`/api/games/${appid}/screenshots`);
+    const data = await res.json();
+    currentScreenshots = data.screenshots || [];
+    const grid = document.getElementById('screenshotGrid');
+    const section = document.getElementById('screenshotSection');
+    if (currentScreenshots.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    grid.innerHTML = '';
+    currentScreenshots.forEach((ss, i) => {
+      const img = document.createElement('img');
+      img.src = ss.path_thumbnail;
+      img.alt = 'Screenshot ' + (i + 1);
+      img.style.cssText = 'height:120px; border-radius:6px; cursor:pointer; object-fit:cover; flex-shrink:0; transition:transform .2s;';
+      img.onmouseover = () => img.style.transform = 'scale(1.05)';
+      img.onmouseout = () => img.style.transform = 'scale(1)';
+      img.onclick = () => openScreenshotModal(i);
+      grid.appendChild(img);
+    });
+  } catch (e) {
+    console.error('Screenshot fetch error:', e);
+  }
+}
+
+function openScreenshotModal(index) {
+  currentScreenshotIndex = index;
+  const modal = document.getElementById('screenshotModal');
+  const full = document.getElementById('screenshotFull');
+  const counter = document.getElementById('screenshotCounter');
+  full.src = currentScreenshots[index].path_full;
+  counter.textContent = (index + 1) + ' / ' + currentScreenshots.length;
+  modal.style.display = 'flex';
+}
+
+function closeScreenshotModal() {
+  document.getElementById('screenshotModal').style.display = 'none';
+}
+
+function navigateScreenshot(dir) {
+  currentScreenshotIndex += dir;
+  if (currentScreenshotIndex < 0) currentScreenshotIndex = currentScreenshots.length - 1;
+  if (currentScreenshotIndex >= currentScreenshots.length) currentScreenshotIndex = 0;
+  const full = document.getElementById('screenshotFull');
+  const counter = document.getElementById('screenshotCounter');
+  full.src = currentScreenshots[currentScreenshotIndex].path_full;
+  counter.textContent = (currentScreenshotIndex + 1) + ' / ' + currentScreenshots.length;
+}
+
+// Call this when a game is clicked/opened — replace APPID with your game's appid
+// fetchScreenshots(APPID);
 <script src="js/app.js"></script>
 </body>
 </html>
