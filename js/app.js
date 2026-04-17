@@ -75,21 +75,9 @@ function findGameById(id) {
 // ========== API HELPERS ==========
 async function fetchScreenshots(appid) {
   try {
-    const apiUrl = `https://store.steampowered.com/api/appdetails?appids=${appid}&filters=screenshots,basic`;
-    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(apiUrl)}`;
-    const res = await fetch(proxyUrl);
+    const res = await fetch(`/api/games/${appid}/screenshots`);
     if (!res.ok) return {screenshots:[], fullDescription:''};
-    const data = await res.json();
-    const appData = data[String(appid)];
-    if (!appData || !appData.success) return {screenshots:[], fullDescription:''};
-    return {
-      screenshots: (appData.data.screenshots || []).map(s => ({
-        path_thumbnail: s.path_thumbnail,
-        path_full: s.path_full,
-        id: s.id
-      })),
-      fullDescription: appData.data.detailed_description || appData.data.about_the_game || ''
-    };
+    return res.json();
   } catch(e) { console.error('Screenshot fetch error:', e); return {screenshots:[], fullDescription:''}; }
 }
 async function apiPost(path, data) {
@@ -132,6 +120,7 @@ function initSplash() {
     const splash = document.getElementById('splash');
     const logo = document.getElementById('intro-logo');
     const skipBtn = document.getElementById('intro-skip');
+    if (!splash || !logo || !skipBtn) { resolve(); return; }
     let resolved = false;
     const finish = () => {
       if (resolved) return;
@@ -220,21 +209,24 @@ function scrollToSection(e, id) {
 // Mobile search toggle
 function toggleMobileSearch() {
   const box = document.getElementById('search-box');
+  if (!box) return;
   const isHidden = box.style.display === 'none' || getComputedStyle(box).display === 'none';
   box.style.display = isHidden ? 'block' : 'none';
-  if (isHidden) box.querySelector('input').focus();
+  if (isHidden) { const inp = box.querySelector('input'); if (inp) inp.focus(); }
 }
 
 // Hamburger menu
 function toggleMobileMenu() {
   const menu = document.getElementById('mobile-menu');
   const burger = document.getElementById('hamburger');
-  menu.classList.toggle('active');
-  burger.classList.toggle('active');
+  if (menu) menu.classList.toggle('active');
+  if (burger) burger.classList.toggle('active');
 }
 function closeMobileMenu() {
-  document.getElementById('mobile-menu').classList.remove('active');
-  document.getElementById('hamburger').classList.remove('active');
+  const menu = document.getElementById('mobile-menu');
+  const burger = document.getElementById('hamburger');
+  if (menu) menu.classList.remove('active');
+  if (burger) burger.classList.remove('active');
 }
 
 // Search
@@ -249,6 +241,7 @@ function handleMobileSearch(query) {
 }
 function doSearch(query) {
   const dd = document.getElementById('search-dropdown');
+  if (!dd) return;
   if (!query || query.length < 2) { dd.classList.remove('active'); return; }
   const q = query.toLowerCase();
   const results = GAMES_DATA.filter(g =>
@@ -277,20 +270,17 @@ function doSearch(query) {
 document.addEventListener('click', (e) => {
   const dd = document.getElementById('search-dropdown');
   const box = document.getElementById('search-box');
-  if (dd && !box.contains(e.target)) dd.classList.remove('active');
+  if (dd && box && !box.contains(e.target)) dd.classList.remove('active');
 });
 
-// Search input listener
-document.addEventListener('DOMContentLoaded', () => {
-  const si = document.getElementById('search-input');
-  if (si) si.addEventListener('input', (e) => handleSearch(e.target.value));
-});
+// Search input listener - set up inside init() after DOM is ready
 
 // ========== HERO SECTION ==========
 function renderHero(games) {
   state.heroGames = games.slice(0, 5);
   const slidesEl = document.getElementById('hero-slides');
   const dotsEl = document.getElementById('hero-dots');
+  if (!slidesEl || !dotsEl) return;
   slidesEl.innerHTML = state.heroGames.map((g, i) => `
     <div class="hero-slide${i===0?' active':''}" data-index="${i}">
       <div class="hero-bg" style="background-image:url('https://cdn.cloudflare.steamstatic.com/steam/apps/${g.id}/library_hero.jpg'), url('https://cdn.cloudflare.steamstatic.com/steam/apps/${g.id}/page_bg_generated.jpg'), url('${g.thumbnail}')"></div>
@@ -357,6 +347,7 @@ const CAROUSEL_SECTIONS = [
 
 function renderCarousels() {
   const container = document.getElementById('normal-content');
+  if (!container) return;
   container.innerHTML = '';
   CAROUSEL_SECTIONS.forEach(sec => {
     const games = getGamesForSection(sec.key);
@@ -375,106 +366,24 @@ function renderCarousels() {
         <div class="carousel-container"></div>
         <button class="carousel-arrow right" onclick="scrollCarousel(this, 1)">${SVG.chevronRight}</button>
       </div>
-      <div class="screenshot-gallery" id="ss-gallery-${sec.key}">
-        <div class="screenshot-gallery-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-          <span>Screenshots</span>
-        </div>
-        <div class="screenshot-strip-wrap">
-          <button class="ss-arrow ss-arrow-left" onclick="scrollScreenshotStrip(this, -1)">${SVG.chevronLeft}</button>
-          <div class="screenshot-strip" id="ss-strip-${sec.key}"></div>
-          <button class="ss-arrow ss-arrow-right" onclick="scrollScreenshotStrip(this, 1)">${SVG.chevronRight}</button>
-        </div>
-      </div>
+
     `;
     const carousel = section.querySelector('.carousel-container');
     games.forEach(g => carousel.appendChild(createGameCard(g)));
     container.appendChild(section);
     // Drag scrolling
     initCarouselDrag(carousel);
-    // Init screenshot strip drag
-    const ssStrip = section.querySelector('.screenshot-strip');
-    initCarouselDrag(ssStrip);
   });
-  // Intersection Observer for lazy reveal + screenshot loading
+  // Intersection Observer for lazy reveal
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {
         e.target.classList.add('visible');
         observer.unobserve(e.target);
-        // Load screenshots for this section
-        const secKey = e.target.id.replace('section-', '').replace('section-', '');
-        const matchingSec = CAROUSEL_SECTIONS.find(s => s.id === e.target.id);
-        if (matchingSec) loadSectionScreenshots(matchingSec.key);
       }
     });
   }, {threshold:0.1, rootMargin:'200px'});
   document.querySelectorAll('.carousel-section').forEach(s => observer.observe(s));
-}
-
-// ========== SECTION SCREENSHOTS ==========
-const _ssLoadedSections = new Set();
-
-async function loadSectionScreenshots(sectionKey) {
-  if (_ssLoadedSections.has(sectionKey)) return;
-  _ssLoadedSections.add(sectionKey);
-
-  const games = getGamesForSection(sectionKey);
-  const strip = document.getElementById(`ss-strip-${sectionKey}`);
-  if (!strip || !games || games.length === 0) return;
-
-  // Show loading skeletons
-  strip.innerHTML = games.slice(0, 8).map(() => '<div class="ss-skeleton"></div>').join('');
-
-  // Fetch screenshots for all games in parallel (with concurrency limit)
- const allScreenshots = [];
-  const BATCH_SIZE = 3;
-  for (let i = 0; i < games.length; i += BATCH_SIZE) {
-    const batch = games.slice(i, i + BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(async (g) => {
-        try {
-          const data = await fetchScreenshots(g.id);
-          return (data.screenshots || []).slice(0, 2).map(s => ({
-            ...s,
-            gameTitle: g.title,
-            gameId: g.id
-          }));
-        } catch(e) { return []; }
-      })
-    );
-    results.forEach(r => {
-      if (r.status === 'fulfilled' && r.value) {
-        allScreenshots.push(...r.value);
-      }
-    });
-  }
-
-  if (allScreenshots.length === 0) {
-    strip.innerHTML = '<div class="ss-empty">No screenshots available</div>';
-    return;
-  }
-
-  // Shuffle for variety
-  for (let i = allScreenshots.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [allScreenshots[i], allScreenshots[j]] = [allScreenshots[j], allScreenshots[i]];
-  }
-
-  strip.innerHTML = allScreenshots.map(ss => `
-    <div class="ss-item" onclick="openLightbox('${ss.path_full}')" title="${escHtml(ss.gameTitle)}">
-      <img src="${ss.path_thumbnail}" alt="${escHtml(ss.gameTitle)} screenshot" loading="lazy">
-      <div class="ss-item-overlay">
-        <span class="ss-item-title">${escHtml(ss.gameTitle)}</span>
-      </div>
-    </div>
-  `).join('');
-}
-
-function scrollScreenshotStrip(btn, dir) {
-  const container = btn.parentElement.querySelector('.screenshot-strip');
-  const scrollAmt = container.clientWidth * 0.7;
-  container.scrollBy({left: dir * scrollAmt, behavior:'smooth'});
 }
 
 function scrollCarousel(btn, dir) {
@@ -550,10 +459,11 @@ function toggleKidsMode() {
   const toggle = document.getElementById('kids-toggle');
   const navLinks = document.getElementById('nav-links');
 
-  navbar.classList.toggle('kids-mode', state.isKidsMode);
-  normal.style.display = state.isKidsMode ? 'none' : 'block';
-  kids.classList.toggle('active', state.isKidsMode);
-  hero.style.display = state.isKidsMode ? 'none' : '';
+  if (navbar) navbar.classList.toggle('kids-mode', state.isKidsMode);
+  if (normal) normal.style.display = state.isKidsMode ? 'none' : 'block';
+  if (kids) kids.classList.toggle('active', state.isKidsMode);
+  if (hero) hero.style.display = state.isKidsMode ? 'none' : '';
+  if (!toggle || !navLinks) return;
 
   if (state.isKidsMode) {
     toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg> Exit Kids';
@@ -587,6 +497,7 @@ function fetchKidsGames() {
 }
 function renderKidsGrid(games) {
   const grid = document.getElementById('kids-grid');
+  if (!grid) return;
   grid.innerHTML = '';
   (games || []).forEach(g => grid.appendChild(createGameCard(g)));
 }
@@ -594,7 +505,8 @@ function renderKidsGrid(games) {
 // ========== GAME DETAIL ==========
 async function openGameDetail(id) {
   // Close search dropdown
-  document.getElementById('search-dropdown').classList.remove('active');
+  const searchDD = document.getElementById('search-dropdown');
+  if (searchDD) searchDD.classList.remove('active');
 
   // Find game from embedded data
   const game = findGameById(id);
@@ -602,6 +514,7 @@ async function openGameDetail(id) {
 
   const overlay = document.getElementById('game-detail');
   const card = document.getElementById('detail-card');
+  if (!overlay || !card) return;
   overlay.classList.add('active');
   document.body.style.overflow = 'hidden';
 
@@ -670,19 +583,22 @@ function renderDetailCard(g) {
 
 function closeGameDetail() {
   const overlay = document.getElementById('game-detail');
-  overlay.classList.remove('active');
+  if (overlay) overlay.classList.remove('active');
   document.body.style.overflow = '';
   state.selectedGame = null;
 }
 
 // ========== LIGHTBOX ==========
 function openLightbox(src) {
-  event && event.stopPropagation();
-  document.getElementById('lightbox-img').src = src;
-  document.getElementById('lightbox').classList.add('active');
+  if (window.event) window.event.stopPropagation();
+  const img = document.getElementById('lightbox-img');
+  const lb = document.getElementById('lightbox');
+  if (img) img.src = src;
+  if (lb) lb.classList.add('active');
 }
 function closeLightbox() {
-  document.getElementById('lightbox').classList.remove('active');
+  const lb = document.getElementById('lightbox');
+  if (lb) lb.classList.remove('active');
 }
 
 // Close overlays on Escape
@@ -692,9 +608,7 @@ document.addEventListener('keydown', (e) => {
     closeLightbox();
   }
 });
-document.getElementById('game-detail').addEventListener('click', (e) => {
-  if (e.target.id === 'game-detail') closeGameDetail();
-});
+// game-detail click listener is set up inside init() after DOM is ready
 
 // ========== UTILITY ==========
 // ========== RATING HELPERS ==========
@@ -848,10 +762,25 @@ async function init() {
   // Render carousel sections
   renderCarousels();
 
+  // Game detail overlay - click backdrop to close
+  const gameDetailEl = document.getElementById('game-detail');
+  if (gameDetailEl) {
+    gameDetailEl.addEventListener('click', (e) => {
+      if (e.target.id === 'game-detail') closeGameDetail();
+    });
+  }
+
+  // Search input listener
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+  }
+
   // Responsive search toggle
   function updateSearchUI() {
     const sb = document.getElementById('search-box');
     const stb = document.getElementById('search-toggle-btn');
+    if (!sb || !stb) return;
     if (window.innerWidth < 768) {
       sb.style.display = 'none';
       stb.style.display = 'flex';
@@ -865,4 +794,4 @@ async function init() {
 }
 
 // Start
-init();
+try { init(); } catch(e) { console.error('GameFlix init error:', e); }
