@@ -126,7 +126,7 @@ cd backend && python app.py
 
 ---
 
-## 👩‍💻 Author
+## 👩‍💻 Built By
 
 **Riya Sonara**
 
