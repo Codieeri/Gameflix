@@ -3,7 +3,7 @@ const state = {
   theme: localStorage.getItem('theme') || 'dark',
   isKidsMode: false,
   selectedGame: null,
-  heroIndex: 0,s
+  heroIndex: 0,
   heroGames: [],
   heroInterval: null,
 };
