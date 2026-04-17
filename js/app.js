@@ -551,10 +551,14 @@ function closeGameDetail() {
 
 // ========== LIGHTBOX ==========
 function openLightbox(src) {
-  event && event.stopPropagation();
-  document.getElementById('lightbox-img').src = src;
+  const img = document.getElementById('lightbox-img');
+  if (img) {
+    img.src = src;
+    img.style.display = 'block';
+  }
   document.getElementById('lightbox').classList.add('active');
 }
+
 function closeLightbox() {
   document.getElementById('lightbox').classList.remove('active');
 }
